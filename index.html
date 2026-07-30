@@ -552,9 +552,10 @@ function fetchCsvRaw(url){
 
 function extractTable(rawRows){
   if(!rawRows || !rawRows.length) return [];
-  const headerIdx = rawRows.findIndex(r => r[0] === 'Date' || r[0] === 'Week Ending');
+  const norm = v => String(v||'').replace(/^\uFEFF/,'').trim().toLowerCase();
+  const headerIdx = rawRows.findIndex(r => norm(r[0]) === 'date' || norm(r[0]) === 'week ending');
   if(headerIdx === -1) return [];
-  const headers = rawRows[headerIdx].map(h => String(h||'').trim());
+  const headers = rawRows[headerIdx].map(h => String(h||'').replace(/^\uFEFF/,'').trim());
   const out = [];
   for(let i = headerIdx+1; i < rawRows.length; i++){
     const row = rawRows[i];
@@ -599,13 +600,25 @@ function parseSettings(rows){
 async function loadAll(){
   const keys = Object.keys(CONFIG.CSV).filter(k => k !== 'settings');
   let anyLive = false;
+  STATE.loadStatus = {};
 
   for(const k of keys){
     const url = CONFIG.CSV[k];
     if(url && url.trim()){
       const rawRows = await fetchCsvRaw(url.trim());
-      const rows = extractTable(rawRows);
-      if(rows && rows.length){ STATE.data[k] = rows; anyLive = true; continue; }
+      if(rawRows === null){
+        STATE.loadStatus[k] = 'fetch failed (network/CORS)';
+      } else {
+        const rows = extractTable(rawRows);
+        if(rows && rows.length){
+          STATE.data[k] = rows; anyLive = true;
+          STATE.loadStatus[k] = `live (${rows.length} rows)`;
+          continue;
+        }
+        STATE.loadStatus[k] = rawRows.length ? 'fetched, but no header row matched "Date"/"Week Ending"' : 'fetched, but sheet appears empty';
+      }
+    } else {
+      STATE.loadStatus[k] = 'no URL configured';
     }
     STATE.data[k] = DEMO[k];
   }
@@ -618,9 +631,13 @@ async function loadAll(){
       if(parsed.sites.length) CONFIG.SITES = parsed.sites;
       if(parsed.employees.length) CONFIG.EMPLOYEES = parsed.employees;
       if(Object.keys(parsed.thresholds).length) CONFIG.THRESHOLDS = { ...CONFIG.THRESHOLDS, ...parsed.thresholds };
+      STATE.loadStatus.settings = `live (${parsed.sites.length} sites, ${parsed.employees.length} employees)`;
+    } else {
+      STATE.loadStatus.settings = 'fetch failed or empty — using built-in defaults';
     }
   }
 
+  console.table(STATE.loadStatus);
   STATE.source = anyLive ? 'live' : 'demo';
   updateSourcePill();
   populateFilters();
@@ -633,6 +650,26 @@ function updateSourcePill(){
   pill.classList.remove('live','demo');
   pill.classList.add(STATE.source);
   label.textContent = STATE.source === 'live' ? 'Live data' : 'Demo data';
+  pill.title = 'Click for per-tab load status';
+  pill.style.cursor = 'pointer';
+  pill.onclick = showDiagnostics;
+}
+
+function showDiagnostics(){
+  const rows = Object.entries(STATE.loadStatus || {})
+    .map(([k,v]) => `<div class="kv"><span class="k">${esc(k)}</span><span class="v" style="text-align:right;font-family:var(--font-mono);">${esc(v)}</span></div>`)
+    .join('');
+  let panel = document.getElementById('diagPanel');
+  if(!panel){
+    panel = document.createElement('div');
+    panel.id = 'diagPanel';
+    panel.style.cssText = 'position:fixed;top:70px;right:24px;z-index:50;width:340px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 17px;box-shadow:0 12px 30px rgba(0,0,0,.4);';
+    document.body.appendChild(panel);
+  }
+  panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <strong style="font-family:var(--font-display);font-size:13px;">Load status</strong>
+      <button onclick="document.getElementById('diagPanel').remove()" style="all:unset;cursor:pointer;color:var(--text-faint);font-size:16px;line-height:1;">×</button>
+    </div>${rows}`;
 }
 
 /* ============================================================
