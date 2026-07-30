@@ -302,6 +302,16 @@ select:focus{outline:2px solid var(--accent);outline-offset:1px;}
 .week-stat .lbl{font-size:10.5px;color:var(--text-faint);margin-top:2px;}
 .manual-note{font-size:10.5px;color:var(--text-faint);margin-top:12px;font-style:italic;}
 
+/* daily summary — time-at-location bar */
+.loc-bar{display:flex;height:10px;border-radius:6px;overflow:hidden;background:var(--line-soft);margin-top:4px;}
+.loc-bar span{height:100%;}
+.loc-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;}
+.loc-legend .li{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--text-faint);font-family:var(--font-mono);}
+.loc-legend .sw{width:7px;height:7px;border-radius:2px;}
+.big-stat{display:flex;align-items:baseline;gap:6px;margin:2px 0 14px;}
+.big-stat .num{font-family:var(--font-mono);font-size:22px;font-weight:600;}
+.big-stat .lbl{font-size:11px;color:var(--text-faint);}
+
 .footnote{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);font-size:11px;color:var(--text-faint);line-height:1.6;}
 .footnote code{background:var(--panel-raised);padding:1px 5px;border-radius:4px;font-family:var(--font-mono);}
 
@@ -442,7 +452,7 @@ select:focus{outline:2px solid var(--accent);outline-offset:1px;}
       <div class="section-head">
         <div>
           <h2>Daily Summary</h2>
-          <p>Auto-detected from the live tab's own columns — tell me the intended layout and I'll give this a purpose-built view.</p>
+          <p>Complete daily reconstruction per employee — time worked, time per location, miles, tasks, and photos, rolled into one compliance score.</p>
         </div>
       </div>
       <div class="grid" id="dailySummaryBody"></div>
@@ -962,15 +972,77 @@ function renderWeekly(){
 function emptyState(msg){ return `<div class="empty">${esc(msg)}</div>`; }
 
 /* ============================================================
-   RENDER: 07 Daily Summary (schema auto-detected)
+   RENDER: 07 Daily Summary
+   Complete daily reconstruction per employee: time worked, time
+   per location, miles, tasks, photos, compliance score.
    ============================================================ */
 function renderDailySummary(){
   const rows = STATE.data.dailySummary.filter(matchesFilter);
   const el = document.getElementById('dailySummaryBody');
   if(!rows.length){
-    el.innerHTML = emptyState('No Daily Summary data loaded yet. Once the tab is live, its columns will render automatically here.');
+    el.innerHTML = emptyState('No Daily Summary data loaded yet.');
     return;
   }
+
+  // known schema check — falls back to a generic card if the tab's columns
+  // don't match what the workbook defines (e.g. it gets restructured later)
+  const known = rows[0].hasOwnProperty('Total Time Worked');
+  if(!known){ renderDailySummaryGeneric(rows, el); return; }
+
+  const siteName = (code, fallback) => {
+    const s = CONFIG.SITES.find(x=>x.code===code);
+    return s ? s.name : fallback;
+  };
+  const segments = [
+    { key:'Time at Warehouse (min)', label: siteName('WH','Warehouse'), color:'var(--text-faint)' },
+    { key:'Time at Site A (min)',    label: siteName('SITE-A','Site A'), color:'var(--accent)' },
+    { key:'Time at Site B (min)',    label: siteName('SITE-B','Site B'), color:'var(--info)' },
+    { key:'Time at Site C (min)',    label: siteName('SITE-C','Site C'), color:'var(--ok)' }
+  ];
+
+  el.innerHTML = rows.map(r=>{
+    const score = Number(r['Daily Compliance Score'])||0;
+    const mins = segments.map(s => Number(r[s.key])||0);
+    const total = mins.reduce((a,b)=>a+b,0) || 1;
+    const bar = segments.map((s,i) => mins[i]>0 ? `<span style="flex:${mins[i]} 0 0;background:${s.color};"></span>` : '').join('');
+    const legend = segments.map((s,i) => mins[i]>0
+      ? `<div class="li"><span class="sw" style="background:${s.color};"></span>${esc(s.label)} · ${mins[i]}m</div>` : '').join('');
+
+    return `<div class="card">
+      <div class="card-head">
+        <span class="who">${esc(r.Employee)}</span>
+        <span class="date">${esc(fmtDate(r.Date))}</span>
+      </div>
+
+      <div class="gauge-wrap">
+        <div class="gauge" style="--score:${score};--score-color:${scoreColor(score)};">
+          <div class="ring-outer"></div>
+          <div class="ring-mid"></div>
+          <div class="ring-score"><span class="num">${score}</span></div>
+        </div>
+        <div>
+          <div class="gauge-label">DAILY COMPLIANCE</div>
+          <div class="big-stat" style="margin:6px 0 0;">
+            <span class="num" style="font-size:16px;">${esc(r['Total Time Worked']||'—')}</span>
+            <span class="lbl">total time worked</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin:14px 0 4px;font-size:10.5px;color:var(--text-faint);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.04em;">Time by location</div>
+      <div class="loc-bar">${bar || `<span style="flex:1 0 0;"></span>`}</div>
+      <div class="loc-legend">${legend || '<span class="li">No geofenced time logged</span>'}</div>
+
+      <div class="week-stats" style="margin-top:16px;">
+        <div class="week-stat"><div class="num">${esc(r['Total Miles Driven']||'0')}</div><div class="lbl">MILES DRIVEN</div></div>
+        <div class="week-stat"><div class="num">${esc(r['Total Tasks Completed']||'0')}</div><div class="lbl">TASKS COMPLETED</div></div>
+        <div class="week-stat" style="grid-column:span 2;"><div class="num">${esc(r['Total Photos Submitted']||'0')}</div><div class="lbl">PHOTOS SUBMITTED</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderDailySummaryGeneric(rows, el){
   const skipKeys = new Set(['Date','Employee','Key (helper)']);
   el.innerHTML = rows.map(r=>{
     const kvs = Object.keys(r).filter(k=>!skipKeys.has(k)).map(k=>
