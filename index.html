@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FORS — Field Supervisor Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+
+/* ============================================================
+   CONFIG — edit here after publishing each tab to the web.
+   File > Share > Publish to web > select tab > CSV
+   Paste each resulting URL below. Leave blank to run on
+   the bundled demo data (matches the source workbook).
+   ============================================================ */
+
+:root{
+  --bg:#12151A;
+  --bg-grid: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.035) 1px, transparent 0);
+  --panel:#1A1E24;
+  --panel-raised:#20252C;
+  --line:#2A3038;
+  --line-soft:#232830;
+  --text:#ECEAE3;
+  --text-dim:#8D93A0;
+  --text-faint:#5B616D;
+  --accent:#FF6A2B;
+  --accent-dim:#B84E1E;
+  --accent-soft:rgba(255,106,43,0.13);
+  --ok:#3ED598;
+  --ok-soft:rgba(62,213,152,0.13);
+  --warn:#FF4D5E;
+  --warn-soft:rgba(255,77,94,0.14);
+  --info:#4FA9FF;
+  --info-soft:rgba(79,169,255,0.13);
+  --font-display:'Space Grotesk',sans-serif;
+  --font-body:'IBM Plex Sans',sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg) var(--bg-grid);
+  background-size:auto, 22px 22px;
+  color:var(--text);
+  font-family:var(--font-body);
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:var(--accent-soft);color:var(--text);}
+::-webkit-scrollbar{width:10px;height:10px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;}
+
+a{color:inherit;}
+button{font-family:inherit;}
+
+/* ---------- shell ---------- */
+.shell{display:flex;min-height:100vh;}
+
+.rail{
+  width:220px;
+  flex:0 0 220px;
+  border-right:1px solid var(--line);
+  padding:22px 14px;
+  position:sticky;
+  top:0;
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  gap:26px;
+}
+.brand{padding:0 8px;}
+.brand .mark{display:flex;align-items:center;gap:9px;margin-bottom:4px;}
+.brand .mark svg{flex:0 0 auto;}
+.brand .mark span{font-family:var(--font-display);font-weight:700;font-size:19px;letter-spacing:0.02em;}
+.brand .sub{font-size:11px;color:var(--text-faint);font-family:var(--font-mono);letter-spacing:0.04em;padding-left:31px;}
+
+.navlist{display:flex;flex-direction:column;gap:3px;}
+.navlist button{
+  all:unset;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:9px 10px;
+  border-radius:7px;
+  font-size:13.5px;
+  color:var(--text-dim);
+  transition:background .15s,color .15s;
+}
+.navlist button:hover{background:var(--panel-raised);color:var(--text);}
+.navlist button.active{background:var(--accent-soft);color:var(--accent);font-weight:600;}
+.navlist button .n{
+  font-family:var(--font-mono);
+  font-size:10px;
+  color:var(--text-faint);
+  width:16px;
+}
+.navlist button.active .n{color:var(--accent-dim);}
+
+.rail-foot{margin-top:auto;padding:10px 8px 2px;border-top:1px solid var(--line-soft);}
+.rail-foot .legend{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.legend-row{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--text-faint);}
+.dot{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
+.dot.ok{background:var(--ok);}
+.dot.warn{background:var(--warn);}
+.dot.info{background:var(--info);}
+
+/* ---------- main ---------- */
+.main{flex:1;min-width:0;padding:22px 30px 60px;}
+
+.topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+  padding-bottom:18px;
+  margin-bottom:22px;
+  border-bottom:1px solid var(--line);
+}
+.topbar h1{
+  font-family:var(--font-display);
+  font-size:20px;
+  font-weight:600;
+  margin:0;
+}
+.topbar .eyebrow{
+  font-family:var(--font-mono);
+  font-size:11px;
+  color:var(--text-faint);
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  margin-bottom:3px;
+}
+.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.field{display:flex;flex-direction:column;gap:4px;}
+.field label{font-size:10px;color:var(--text-faint);font-family:var(--font-mono);letter-spacing:0.04em;text-transform:uppercase;}
+select{
+  appearance:none;
+  background:var(--panel-raised);
+  border:1px solid var(--line);
+  color:var(--text);
+  font-family:var(--font-mono);
+  font-size:12.5px;
+  padding:7px 30px 7px 10px;
+  border-radius:7px;
+  cursor:pointer;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238D93A0'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 11px center;
+  min-width:150px;
+}
+select:focus{outline:2px solid var(--accent);outline-offset:1px;}
+
+.pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-family:var(--font-mono);
+  font-size:11px;
+  padding:6px 11px;
+  border-radius:20px;
+  border:1px solid var(--line);
+  color:var(--text-dim);
+  background:var(--panel-raised);
+}
+.pill .dot{animation:pulse 2s ease-in-out infinite;}
+.pill.live .dot{background:var(--ok);}
+.pill.demo .dot{background:var(--info);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+
+/* ---------- sections ---------- */
+.section{display:none;}
+.section.active{display:block;animation:fade .25s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+.section-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+.section-head h2{font-family:var(--font-display);font-size:16px;margin:0;font-weight:600;}
+.section-head p{margin:2px 0 0;font-size:12.5px;color:var(--text-faint);}
+
+.empty{
+  border:1px dashed var(--line);
+  border-radius:10px;
+  padding:40px 20px;
+  text-align:center;
+  color:var(--text-faint);
+  font-size:13px;
+}
+
+/* ---------- timeline (Daily Timeline tab) ---------- */
+.emp-group{margin-bottom:26px;}
+.emp-group-head{
+  display:flex;align-items:center;gap:10px;margin-bottom:12px;
+}
+.emp-group-head .avatar{
+  width:26px;height:26px;border-radius:50%;
+  background:var(--accent-soft);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-mono);font-size:11px;font-weight:600;
+}
+.emp-group-head .name{font-weight:600;font-size:13.5px;}
+.emp-group-head .date{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);}
+
+.rail-line{position:relative;padding-left:26px;}
+.rail-line::before{
+  content:'';position:absolute;left:8px;top:6px;bottom:6px;width:1px;
+  background:linear-gradient(var(--line),var(--line) 90%,transparent);
+}
+.tl-item{position:relative;padding:0 0 20px;}
+.tl-item:last-child{padding-bottom:0;}
+.tl-item::before{
+  content:'';position:absolute;left:-26px;top:3px;width:9px;height:9px;border-radius:50%;
+  background:var(--panel);border:2px solid var(--ok);
+}
+.tl-item.flag::before{border-color:var(--warn);}
+.tl-item .row1{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+.tl-time{font-family:var(--font-mono);font-size:12px;color:var(--text-dim);min-width:64px;}
+.tl-loc{font-weight:600;font-size:13px;}
+.tl-src{
+  font-family:var(--font-mono);font-size:10px;color:var(--text-faint);
+  border:1px solid var(--line);padding:1px 7px;border-radius:10px;
+}
+.tl-activity{font-size:12.5px;color:var(--text-dim);margin-top:3px;}
+.tl-meta{display:flex;gap:10px;margin-top:5px;flex-wrap:wrap;align-items:center;}
+.chip{
+  font-family:var(--font-mono);font-size:10.5px;padding:2px 8px;border-radius:20px;
+  display:inline-flex;align-items:center;gap:4px;
+}
+.chip.ok{background:var(--ok-soft);color:var(--ok);}
+.chip.warn{background:var(--warn-soft);color:var(--warn);}
+.chip.dur{background:var(--panel-raised);color:var(--text-faint);border:1px solid var(--line);}
+
+/* ---------- card grid ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}
+.card{
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:16px 17px;
+}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.card-head .who{font-weight:600;font-size:13.5px;}
+.card-head .date{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line-soft);font-size:12.5px;}
+.kv:last-child{border-bottom:none;}
+.kv .k{color:var(--text-faint);}
+.kv .v{font-family:var(--font-mono);font-weight:500;text-align:right;}
+.kv .v.warn{color:var(--warn);}
+.kv .v.ok{color:var(--ok);}
+
+.badge{
+  font-family:var(--font-mono);font-size:10.5px;padding:2px 8px;border-radius:5px;font-weight:600;letter-spacing:.02em;
+}
+.badge.ok{background:var(--ok-soft);color:var(--ok);}
+.badge.warn{background:var(--warn-soft);color:var(--warn);}
+.badge.info{background:var(--info-soft);color:var(--info);}
+
+/* geofence ring gauge */
+.gauge-wrap{display:flex;align-items:center;gap:16px;margin-bottom:10px;}
+.gauge{position:relative;width:74px;height:74px;flex:0 0 auto;}
+.gauge .ring-outer,.gauge .ring-mid{
+  position:absolute;inset:0;border-radius:50%;border:1px dashed var(--line);
+}
+.gauge .ring-mid{inset:8px;}
+.gauge .ring-score{
+  position:absolute;inset:0;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+}
+.gauge .ring-score::before{
+  content:'';position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(var(--score-color,var(--ok)) calc(var(--score,0)*1%), var(--line-soft) 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 7px),#000 calc(100% - 6px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - 7px),#000 calc(100% - 6px));
+}
+.gauge .num{position:relative;font-family:var(--font-mono);font-weight:600;font-size:16px;}
+.gauge-label{font-size:11px;color:var(--text-faint);font-family:var(--font-mono);}
+
+/* responsiveness dots */
+.dots5{display:flex;gap:3px;}
+.dots5 span{width:6px;height:6px;border-radius:50%;background:var(--line);}
+.dots5 span.on{background:var(--accent);}
+
+/* contractor cards */
+.c-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 17px;margin-bottom:12px;}
+.c-card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;flex-wrap:wrap;}
+.c-card .who{font-weight:600;font-size:13.5px;}
+.c-card .site{font-size:11.5px;color:var(--text-faint);font-family:var(--font-mono);}
+.c-card .issue{font-size:12.5px;color:var(--text-dim);margin:6px 0;}
+.c-card .foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--line-soft);}
+
+/* weekly */
+.week-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;}
+.week-card .card-head{margin-bottom:16px;}
+.week-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;}
+.week-stat{background:var(--panel-raised);border:1px solid var(--line-soft);border-radius:9px;padding:10px 12px;}
+.week-stat .num{font-family:var(--font-mono);font-size:17px;font-weight:600;}
+.week-stat .lbl{font-size:10.5px;color:var(--text-faint);margin-top:2px;}
+.manual-note{font-size:10.5px;color:var(--text-faint);margin-top:12px;font-style:italic;}
+
+.footnote{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);font-size:11px;color:var(--text-faint);line-height:1.6;}
+.footnote code{background:var(--panel-raised);padding:1px 5px;border-radius:4px;font-family:var(--font-mono);}
+
+@media (max-width:820px){
+  .rail{position:fixed;left:-240px;transition:left .2s;z-index:20;background:var(--bg);}
+  .shell.nav-open .rail{left:0;}
+  .main{padding:18px;}
+}
+</style>
+</head>
+<body>
+
+<div class="shell" id="shell">
+
+  <nav class="rail">
+    <div class="brand">
+      <div class="mark">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10.5" stroke="#FF6A2B" stroke-width="1.1" stroke-dasharray="2 3"/>
+          <circle cx="12" cy="12" r="6.5" stroke="#FF6A2B" stroke-width="1.1" opacity="0.55"/>
+          <circle cx="12" cy="12" r="2.2" fill="#FF6A2B"/>
+        </svg>
+        <span>FORS</span>
+      </div>
+      <div class="sub">Field Ops Reporting</div>
+    </div>
+
+    <div class="navlist" id="navlist">
+      <button data-section="timeline" class="active"><span class="n">01</span>Daily Timeline</button>
+      <button data-section="location"><span class="n">02</span>Location Verification</button>
+      <button data-section="vehicle"><span class="n">03</span>Vehicle Tracking</button>
+      <button data-section="contractor"><span class="n">04</span>Contractor Interactions</button>
+      <button data-section="eod"><span class="n">05</span>EOD Compliance</button>
+      <button data-section="weekly"><span class="n">06</span>Weekly Summary</button>
+    </div>
+
+    <div class="rail-foot">
+      <div class="sub" style="padding-left:0;margin-bottom:2px;">Legend</div>
+      <div class="legend">
+        <div class="legend-row"><span class="dot ok"></span>Verified / on target</div>
+        <div class="legend-row"><span class="dot warn"></span>Flagged — needs review</div>
+        <div class="legend-row"><span class="dot info"></span>Reference / info only</div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="eyebrow">Supervisor Dashboard</div>
+        <h1 id="pageTitle">Daily Timeline</h1>
+      </div>
+      <div class="controls">
+        <div class="field">
+          <label for="employeeSelect">Employee</label>
+          <select id="employeeSelect"></select>
+        </div>
+        <div class="field">
+          <label for="dateSelect">Date</label>
+          <select id="dateSelect"></select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <span class="pill" id="sourcePill"><span class="dot"></span><span id="sourceLabel">Loading…</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 01 Daily Timeline -->
+    <section class="section active" id="sec-timeline">
+      <div class="section-head">
+        <div>
+          <h2>Daily Timeline</h2>
+          <p>Where the employee was, what they did, and whether it's verified — built from every event of the day.</p>
+        </div>
+      </div>
+      <div id="timelineBody"></div>
+    </section>
+
+    <!-- 02 Location Verification -->
+    <section class="section" id="sec-location">
+      <div class="section-head">
+        <div>
+          <h2>Location Verification</h2>
+          <p>Was the employee physically where they were supposed to be — one card per employee per day.</p>
+        </div>
+      </div>
+      <div class="grid" id="locationBody"></div>
+    </section>
+
+    <!-- 03 Vehicle Tracking -->
+    <section class="section" id="sec-vehicle">
+      <div class="section-head">
+        <div>
+          <h2>Vehicle Tracking</h2>
+          <p>Did the employee actually drive to the sites — fleet GPS cross-checked against logged site visits.</p>
+        </div>
+      </div>
+      <div class="grid" id="vehicleBody"></div>
+    </section>
+
+    <!-- 04 Contractor Interactions -->
+    <section class="section" id="sec-contractor">
+      <div class="section-head">
+        <div>
+          <h2>Contractor Interactions</h2>
+          <p>Did the employee engage contractors and push work forward.</p>
+        </div>
+      </div>
+      <div id="contractorBody"></div>
+    </section>
+
+    <!-- 05 EOD Compliance -->
+    <section class="section" id="sec-eod">
+      <div class="section-head">
+        <div>
+          <h2>EOD Compliance</h2>
+          <p>Did the employee properly close the day — composite score rolls up every other tab.</p>
+        </div>
+      </div>
+      <div class="grid" id="eodBody"></div>
+    </section>
+
+    <!-- 06 Weekly Summary -->
+    <section class="section" id="sec-weekly">
+      <div class="section-head">
+        <div>
+          <h2>Weekly Summary</h2>
+          <p>Roll-up across all tabs for the week ending on the date shown.</p>
+        </div>
+      </div>
+      <div class="grid" id="weeklyBody"></div>
+    </section>
+
+    <div class="footnote">
+      Data sources: Daily Timeline, Location Verification, Vehicle Tracking, Contractor Interactions, EOD Compliance and Weekly Summary tabs.
+      To go live, publish each tab in Google Sheets (<code>File → Share → Publish to web → CSV</code>) and paste the URLs into the
+      <code>CONFIG.CSV</code> block near the top of this file. Until then, the dashboard runs on the bundled demo dataset.
+      OFCI material data is intentionally excluded from this view.
+    </div>
+  </main>
+</div>
+
+<script>
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const CONFIG = {
+  PROJECT_TAG: 'FORS',
+
+  // Paste published-CSV URLs here to go live. Leave '' to use demo data.
+  CSV: {
+    timeline:   '',
+    location:   '',
+    vehicle:    '',
+    contractor: '',
+    eod:        '',
+    weekly:     ''
+  },
+
+  // Mirrors the Dashboard Settings tab. Edit to match your roster/sites.
+  EMPLOYEES: [
+    { id: 'EMP-001', name: 'J. Martinez', role: 'Field Supervisor', vehicle: 'VEH-01' },
+    { id: 'EMP-002', name: 'T. Reyes',    role: 'Field Supervisor', vehicle: 'VEH-02' }
+  ],
+  SITES: [
+    { code: 'WH',     name: 'Redwood Custodian Warehouse' },
+    { code: 'SITE-A', name: 'The New Candlelight' },
+    { code: 'SITE-B', name: 'NMP Attachment Track B' },
+    { code: 'SITE-C', name: 'Kilimanjaro Reggae House' }
+  ],
+  THRESHOLDS: {
+    minSiteVisitsPerDay: 2,
+    maxOffSiteClockIns: 0,
+    dailyMileageReview: 120
+  }
+};
+
+/* ============================================================
+   DEMO DATA — mirrors the source workbook (OFCI tab excluded)
+   ============================================================ */
+const DEMO = {
+  timeline: [
+    {Date:'2026-07-27',Employee:'J. Martinez',Timestamp:'7:58 AM',Location:'Redwood Custodian Warehouse',['Verification Source']:'GPS Clock-In',Activity:'Clock-In: Geofence verified on entry',Evidence:'',['Duration (min)']:'6','Compliance Flags':'OK'},
+    {Date:'2026-07-27',Employee:'J. Martinez',Timestamp:'8:04 AM',Location:'Redwood Custodian Warehouse',['Verification Source']:'Form Portal',Activity:'Form Submit: Opening checklist + loading bay photo',Evidence:'Opening checklist + loading bay photo',['Duration (min)']:'97','Compliance Flags':'OK'},
+    {Date:'2026-07-27',Employee:'J. Martinez',Timestamp:'9:41 AM',Location:'The New Candlelight',['Verification Source']:'Geofence',Activity:'Site Arrival: Vehicle parked, geofence entry logged',Evidence:'Vehicle parked, geofence entry logged',['Duration (min)']:'11','Compliance Flags':'OK'},
+    {Date:'2026-07-27',Employee:'J. Martinez',Timestamp:'9:52 AM',Location:'The New Candlelight',['Verification Source']:'OFCI Log',Activity:'Material Release: REQ-NC-0114 released, GC signature on file',Evidence:'REQ-NC-0114 released, GC signature on file',['Duration (min)']:'88','Compliance Flags':'OK'},
+    {Date:'2026-07-27',Employee:'J. Martinez',Timestamp:'11:20 AM',Location:'The New Candlelight',['Verification Source']:'Geofence',Activity:'Site Departure: Vehicle departed geofence',Evidence:'Vehicle departed geofence',['Duration (min)']:'27','Compliance Flags':'OK'},
+    {Date:'2026-07-27',Employee:'J. Martinez',Timestamp:'11:47 AM',Location:'NMP Attachment Track B',['Verification Source']:'Geofence',Activity:'Site Arrival',Evidence:'',['Duration (min)']:'83','Compliance Flags':'MISSING EVIDENCE'},
+    {Date:'2026-07-27',Employee:'J. Martinez',Timestamp:'1:10 PM',Location:'NMP Attachment Track B',['Verification Source']:'Form Portal',Activity:'Form Submit: Punchlist update, 3 photos attached',Evidence:'Punchlist update, 3 photos attached',['Duration (min)']:'225','Compliance Flags':'OK'},
+    {Date:'2026-07-27',Employee:'J. Martinez',Timestamp:'4:55 PM',Location:'Redwood Custodian Warehouse',['Verification Source']:'Form Portal',Activity:'Form Submit: EOD report submitted',Evidence:'EOD report submitted',['Duration (min)']:'7','Compliance Flags':'OK'},
+    {Date:'2026-07-27',Employee:'J. Martinez',Timestamp:'5:02 PM',Location:'Redwood Custodian Warehouse',['Verification Source']:'GPS Clock-Out',Activity:'Clock-Out: Geofence verified on exit',Evidence:'Geofence verified on exit',['Duration (min)']:'-','Compliance Flags':'OK'},
+    {Date:'2026-07-27',Employee:'T. Reyes',Timestamp:'8:12 AM',Location:'Personal Vehicle - Unverified Location',['Verification Source']:'GPS Clock-In',Activity:'Clock-In: Off-geofence override - flagged',Evidence:'Off-geofence override - flagged',['Duration (min)']:'113','Compliance Flags':'OFF-SITE CLOCK-IN'},
+    {Date:'2026-07-27',Employee:'T. Reyes',Timestamp:'10:05 AM',Location:'Kilimanjaro Reggae House',['Verification Source']:'Form Portal',Activity:'Form Submit: MEP walkthrough notes, no photo',Evidence:'MEP walkthrough notes, no photo',['Duration (min)']:'395','Compliance Flags':'OK'},
+    {Date:'2026-07-27',Employee:'T. Reyes',Timestamp:'4:40 PM',Location:'Kilimanjaro Reggae House',['Verification Source']:'GPS Clock-Out',Activity:'Clock-Out: Geofence verified on exit',Evidence:'Geofence verified on exit',['Duration (min)']:'-','Compliance Flags':'OK'},
+    {Date:'2026-07-28',Employee:'J. Martinez',Timestamp:'7:55 AM',Location:'Redwood Custodian Warehouse',['Verification Source']:'GPS Clock-In',Activity:'Clock-In: Geofence verified on entry',Evidence:'Geofence verified on entry',['Duration (min)']:'80','Compliance Flags':'OK'},
+    {Date:'2026-07-28',Employee:'J. Martinez',Timestamp:'9:15 AM',Location:'Kilimanjaro Reggae House',['Verification Source']:'Geofence',Activity:'Site Arrival',Evidence:'',['Duration (min)']:'15','Compliance Flags':'MISSING EVIDENCE'},
+    {Date:'2026-07-28',Employee:'J. Martinez',Timestamp:'9:30 AM',Location:'Kilimanjaro Reggae House',['Verification Source']:'Form Portal',Activity:'Form Submit: Contractor meeting notes + photo',Evidence:'Contractor meeting notes + photo',['Duration (min)']:'255','Compliance Flags':'OK'},
+    {Date:'2026-07-28',Employee:'J. Martinez',Timestamp:'1:45 PM',Location:'The New Candlelight',['Verification Source']:'Geofence',Activity:'Site Arrival',Evidence:'',['Duration (min)']:'17','Compliance Flags':'MISSING EVIDENCE'},
+    {Date:'2026-07-28',Employee:'J. Martinez',Timestamp:'2:02 PM',Location:'The New Candlelight',['Verification Source']:'OFCI Log',Activity:'Material Intake: REQ-NC-0115 intake, dye-lot verified',Evidence:'REQ-NC-0115 intake, dye-lot verified',['Duration (min)']:'176','Compliance Flags':'OK'},
+    {Date:'2026-07-28',Employee:'J. Martinez',Timestamp:'4:58 PM',Location:'Redwood Custodian Warehouse',['Verification Source']:'Form Portal',Activity:'Form Submit: EOD report submitted',Evidence:'EOD report submitted',['Duration (min)']:'7','Compliance Flags':'OK'},
+    {Date:'2026-07-28',Employee:'J. Martinez',Timestamp:'5:05 PM',Location:'Redwood Custodian Warehouse',['Verification Source']:'GPS Clock-Out',Activity:'Clock-Out: Geofence verified on exit',Evidence:'Geofence verified on exit',['Duration (min)']:'-','Compliance Flags':'OK'}
+  ],
+  location: [
+    {Date:'2026-07-27',Employee:'J. Martinez','Clock-In Time':'7:58 AM','Clock-In Location':'Redwood Custodian Warehouse','Clock-Out Time':'5:02 PM','Clock-Out Location':'Redwood Custodian Warehouse','Site Visit Count':'2','First Site Arrival':'9:41 AM','Last Site Arrival':'11:47 AM','Off-Site Clock-In Attempts':'0'},
+    {Date:'2026-07-27',Employee:'T. Reyes','Clock-In Time':'8:12 AM','Clock-In Location':'','Clock-Out Time':'4:40 PM','Clock-Out Location':'Kilimanjaro Reggae House','Site Visit Count':'0','First Site Arrival':'','Last Site Arrival':'','Off-Site Clock-In Attempts':'1'},
+    {Date:'2026-07-28',Employee:'J. Martinez','Clock-In Time':'7:55 AM','Clock-In Location':'Redwood Custodian Warehouse','Clock-Out Time':'5:05 PM','Clock-Out Location':'Redwood Custodian Warehouse','Site Visit Count':'2','First Site Arrival':'9:15 AM','Last Site Arrival':'1:45 PM','Off-Site Clock-In Attempts':'0'}
+  ],
+  vehicle: [
+    {Date:'2026-07-27',Employee:'J. Martinez','Vehicle ID':'VEH-01','Start Odometer':'18422','End Odometer':'18471','Total Miles':'49','Route Match (Y/N)':'Y','Site Arrival GPS':'45.5231,-122.6765 / 45.5309,-122.6531','Warehouse Arrival GPS':'45.5152,-122.6784','Fuel Card Receipts':'$41.20','Unusual Stops':''},
+    {Date:'2026-07-27',Employee:'T. Reyes','Vehicle ID':'VEH-02','Start Odometer':'9103','End Odometer':'9103','Total Miles':'0','Route Match (Y/N)':'N','Site Arrival GPS':'','Warehouse Arrival GPS':'45.5088,-122.6602','Fuel Card Receipts':'$0.00','Unusual Stops':''},
+    {Date:'2026-07-28',Employee:'J. Martinez','Vehicle ID':'VEH-01','Start Odometer':'18471','End Odometer':'18528','Total Miles':'57','Route Match (Y/N)':'Y','Site Arrival GPS':'45.5088,-122.6602 / 45.5231,-122.6765','Warehouse Arrival GPS':'45.5152,-122.6784','Fuel Card Receipts':'$38.75','Unusual Stops':''}
+  ],
+  contractor: [
+    {Date:'2026-07-27',Employee:'J. Martinez','Contractor Name':'Urban Resources Inc.',Site:'The New Candlelight','Time Met':'9:52 AM','Issues Raised':'Tile crate #4 delivery discrepancy noted','Punchlist Items Completed':'N/A - material handoff only','GC Confirmation (Y/N)':'Y','Responsiveness Score (1-5)':'5'},
+    {Date:'2026-07-28',Employee:'T. Reyes','Contractor Name':'HMK Company (D. Janczyk)',Site:'Kilimanjaro Reggae House','Time Met':'9:30 AM','Issues Raised':'MEP rough-in schedule slip flagged','Punchlist Items Completed':'2 of 5 punchlist items closed','GC Confirmation (Y/N)':'Y','Responsiveness Score (1-5)':'4'}
+  ],
+  eod: [
+    {Date:'2026-07-27',Employee:'J. Martinez','EOD Report Submitted (Y/N)':'Y','Submitted Before 5 PM (Y/N)':'Y','Completed Tasks':'Opening check, NC material release, NMP punchlist review','Rolled-Over Tasks':'Site C walkthrough - rolled to 7/28','Photos Attached':'4','Mileage Logged':'49','Daily Compliance Score':'100'},
+    {Date:'2026-07-27',Employee:'T. Reyes','EOD Report Submitted (Y/N)':'N','Submitted Before 5 PM (Y/N)':'N','Completed Tasks':'MEP walkthrough notes','Rolled-Over Tasks':'EOD report not submitted','Photos Attached':'0','Mileage Logged':'0','Daily Compliance Score':'25'},
+    {Date:'2026-07-28',Employee:'J. Martinez','EOD Report Submitted (Y/N)':'Y','Submitted Before 5 PM (Y/N)':'Y','Completed Tasks':'Site C meeting, NC material intake','Rolled-Over Tasks':'None','Photos Attached':'3','Mileage Logged':'57','Daily Compliance Score':'100'}
+  ],
+  weekly: [
+    {['Week Ending']:'2026-08-02',Employee:'J. Martinez','Total Site Visits':'4','Total Miles Driven':'106','Community Issues (manual)':'0','Safety Incidents (manual)':'0','Weekly Compliance Score':'100'},
+    {['Week Ending']:'2026-08-02',Employee:'T. Reyes','Total Site Visits':'0','Total Miles Driven':'0','Community Issues (manual)':'0','Safety Incidents (manual)':'0','Weekly Compliance Score':'25'}
+  ]
+};
+
+/* ============================================================
+   STATE + LOAD
+   ============================================================ */
+const STATE = { data: {timeline:[],location:[],vehicle:[],contractor:[],eod:[],weekly:[]}, source:'demo', employee:'ALL', date:'ALL' };
+
+function fetchCsv(url){
+  return new Promise((resolve)=>{
+    Papa.parse(url, {
+      download:true, header:true, skipEmptyLines:true,
+      complete: r => resolve(r.data || []),
+      error: () => resolve(null)
+    });
+  });
+}
+
+async function loadAll(){
+  const keys = Object.keys(CONFIG.CSV);
+  let anyLive = false;
+  for(const k of keys){
+    const url = CONFIG.CSV[k];
+    if(url && url.trim()){
+      const rows = await fetchCsv(url.trim());
+      if(rows && rows.length){ STATE.data[k] = rows; anyLive = true; continue; }
+    }
+    STATE.data[k] = DEMO[k];
+  }
+  STATE.source = anyLive ? 'live' : 'demo';
+  updateSourcePill();
+  populateFilters();
+  renderAll();
+}
+
+function updateSourcePill(){
+  const pill = document.getElementById('sourcePill');
+  const label = document.getElementById('sourceLabel');
+  pill.classList.remove('live','demo');
+  pill.classList.add(STATE.source);
+  label.textContent = STATE.source === 'live' ? 'Live data' : 'Demo data';
+}
+
+/* ============================================================
+   FILTERS
+   ============================================================ */
+function populateFilters(){
+  const empSel = document.getElementById('employeeSelect');
+  const dateSel = document.getElementById('dateSelect');
+
+  const names = new Set(CONFIG.EMPLOYEES.map(e=>e.name));
+  STATE.data.timeline.forEach(r=>{ if(r.Employee) names.add(r.Employee); });
+  empSel.innerHTML = '<option value="ALL">All employees</option>' +
+    [...names].map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+
+  const dates = new Set();
+  STATE.data.timeline.forEach(r=>{ if(r.Date) dates.add(r.Date); });
+  const sorted = [...dates].sort();
+  dateSel.innerHTML = '<option value="ALL">All dates</option>' +
+    sorted.map(d=>`<option value="${esc(d)}">${fmtDate(d)}</option>`).join('');
+  if(sorted.length) dateSel.value = sorted[sorted.length-1];
+  STATE.date = dateSel.value;
+
+  empSel.addEventListener('change', ()=>{ STATE.employee = empSel.value; renderAll(); });
+  dateSel.addEventListener('change', ()=>{ STATE.date = dateSel.value; renderAll(); });
+}
+
+function matchesFilter(row){
+  const empOk = STATE.employee === 'ALL' || row.Employee === STATE.employee;
+  const dateOk = STATE.date === 'ALL' || row.Date === STATE.date;
+  return empOk && dateOk;
+}
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function initials(name){ return String(name||'?').split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase(); }
+function fmtDate(d){
+  const dt = new Date(d + 'T00:00:00');
+  if(isNaN(dt)) return d;
+  return dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+}
+function yn(v){ return String(v).trim().toUpperCase() === 'Y'; }
+function scoreColor(n){
+  const s = Number(n)||0;
+  if(s >= 90) return 'var(--ok)';
+  if(s >= 60) return 'var(--info)';
+  return 'var(--warn)';
+}
+function groupByEmployeeThenDate(rows){
+  const map = {};
+  rows.forEach(r=>{
+    const key = r.Employee || 'Unknown';
+    map[key] = map[key] || {};
+    const dk = r.Date || 'Unknown';
+    map[key][dk] = map[key][dk] || [];
+    map[key][dk].push(r);
+  });
+  return map;
+}
+
+/* ============================================================
+   RENDER: 01 Daily Timeline
+   ============================================================ */
+function renderTimeline(){
+  const rows = STATE.data.timeline.filter(matchesFilter);
+  const el = document.getElementById('timelineBody');
+  if(!rows.length){ el.innerHTML = emptyState('No timeline events for this selection.'); return; }
+
+  const grouped = groupByEmployeeThenDate(rows);
+  let html = '';
+  Object.keys(grouped).sort().forEach(emp=>{
+    Object.keys(grouped[emp]).sort().forEach(date=>{
+      const items = grouped[emp][date];
+      html += `<div class="emp-group">
+        <div class="emp-group-head">
+          <div class="avatar">${esc(initials(emp))}</div>
+          <div class="name">${esc(emp)}</div>
+          <div class="date">${esc(fmtDate(date))}</div>
+        </div>
+        <div class="rail-line">`;
+      items.forEach(r=>{
+        const flag = (r['Compliance Flags']||'').trim();
+        const isFlag = flag && flag !== 'OK';
+        const dur = r['Duration (min)'];
+        html += `<div class="tl-item ${isFlag?'flag':''}">
+          <div class="row1">
+            <span class="tl-time">${esc(r.Timestamp||'')}</span>
+            <span class="tl-loc">${esc(r.Location||'')}</span>
+            <span class="tl-src">${esc(r['Verification Source']||'')}</span>
+          </div>
+          <div class="tl-activity">${esc(r.Activity||'')}</div>
+          <div class="tl-meta">
+            ${dur && dur !== '-' ? `<span class="chip dur">${esc(dur)} min</span>` : ''}
+            ${isFlag ? `<span class="chip warn">⚠ ${esc(flag)}</span>` : `<span class="chip ok">✓ verified</span>`}
+          </div>
+        </div>`;
+      });
+      html += `</div></div>`;
+    });
+  });
+  el.innerHTML = html;
+}
+
+/* ============================================================
+   RENDER: 02 Location Verification
+   ============================================================ */
+function renderLocation(){
+  const rows = STATE.data.location.filter(matchesFilter);
+  const el = document.getElementById('locationBody');
+  if(!rows.length){ el.innerHTML = emptyState('No location verification records for this selection.'); return; }
+
+  el.innerHTML = rows.map(r=>{
+    const offsite = Number(r['Off-Site Clock-In Attempts'])||0;
+    const visits = Number(r['Site Visit Count'])||0;
+    const belowMin = visits < CONFIG.THRESHOLDS.minSiteVisitsPerDay;
+    return `<div class="card">
+      <div class="card-head">
+        <span class="who">${esc(r.Employee)}</span>
+        <span class="date">${esc(fmtDate(r.Date))}</span>
+      </div>
+      <div class="kv"><span class="k">Clock-in</span><span class="v">${esc(r['Clock-In Time']||'—')} · ${esc(r['Clock-In Location']||'unverified')}</span></div>
+      <div class="kv"><span class="k">Clock-out</span><span class="v">${esc(r['Clock-Out Time']||'—')} · ${esc(r['Clock-Out Location']||'unverified')}</span></div>
+      <div class="kv"><span class="k">Site visits</span><span class="v ${belowMin?'warn':''}">${visits} ${belowMin?`(below min. ${CONFIG.THRESHOLDS.minSiteVisitsPerDay})`:''}</span></div>
+      <div class="kv"><span class="k">First / last arrival</span><span class="v">${esc(r['First Site Arrival']||'—')} / ${esc(r['Last Site Arrival']||'—')}</span></div>
+      <div class="kv"><span class="k">Off-site clock-in attempts</span><span class="v ${offsite>0?'warn':'ok'}">${offsite}</span></div>
+      <div style="margin-top:12px;">
+        ${offsite>0 ? `<span class="badge warn">OFF-SITE CLOCK-IN</span>` : `<span class="badge ok">LOCATION VERIFIED</span>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   RENDER: 03 Vehicle Tracking
+   ============================================================ */
+function renderVehicle(){
+  const rows = STATE.data.vehicle.filter(matchesFilter);
+  const el = document.getElementById('vehicleBody');
+  if(!rows.length){ el.innerHTML = emptyState('No vehicle tracking records for this selection.'); return; }
+
+  el.innerHTML = rows.map(r=>{
+    const miles = Number(r['Total Miles'])||0;
+    const highMileage = miles > CONFIG.THRESHOLDS.dailyMileageReview;
+    const routeMatch = yn(r['Route Match (Y/N)']);
+    return `<div class="card">
+      <div class="card-head">
+        <span class="who">${esc(r.Employee)} <span style="color:var(--text-faint);font-weight:400;">· ${esc(r['Vehicle ID'])}</span></span>
+        <span class="date">${esc(fmtDate(r.Date))}</span>
+      </div>
+      <div class="kv"><span class="k">Odometer</span><span class="v">${esc(r['Start Odometer'])} → ${esc(r['End Odometer'])}</span></div>
+      <div class="kv"><span class="k">Total miles</span><span class="v ${highMileage?'warn':''}">${miles} mi${highMileage?' — high':''}</span></div>
+      <div class="kv"><span class="k">Route matches site visits</span><span class="v ${routeMatch?'ok':'warn'}">${routeMatch?'Yes':'No'}</span></div>
+      <div class="kv"><span class="k">Site arrival GPS</span><span class="v" style="font-size:11px;">${esc(r['Site Arrival GPS']||'—')}</span></div>
+      <div class="kv"><span class="k">Fuel card receipts</span><span class="v">${esc(r['Fuel Card Receipts']||'—')}</span></div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+        ${highMileage ? `<span class="badge warn">REVIEW — HIGH MILEAGE</span>` : `<span class="badge ok">MILEAGE OK</span>`}
+        ${r['Unusual Stops'] ? `<span class="badge warn">${esc(r['Unusual Stops'])}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   RENDER: 04 Contractor Interactions
+   ============================================================ */
+function renderContractor(){
+  const rows = STATE.data.contractor.filter(matchesFilter);
+  const el = document.getElementById('contractorBody');
+  if(!rows.length){ el.innerHTML = emptyState('No contractor interactions logged for this selection.'); return; }
+
+  el.innerHTML = rows.map(r=>{
+    const score = Number(r['Responsiveness Score (1-5)'])||0;
+    const dots = Array.from({length:5}, (_,i)=>`<span class="${i<score?'on':''}"></span>`).join('');
+    const confirmed = yn(r['GC Confirmation (Y/N)']);
+    return `<div class="c-card">
+      <div class="top">
+        <div>
+          <div class="who">${esc(r['Contractor Name'])}</div>
+          <div class="site">${esc(r.Site)} · ${esc(fmtDate(r.Date))} · met ${esc(r['Time Met']||'—')} · ${esc(r.Employee)}</div>
+        </div>
+        ${confirmed ? `<span class="badge ok">GC CONFIRMED</span>` : `<span class="badge warn">UNCONFIRMED</span>`}
+      </div>
+      <div class="issue"><strong style="color:var(--text-dim);">Issues raised —</strong> ${esc(r['Issues Raised']||'None')}</div>
+      <div class="issue"><strong style="color:var(--text-dim);">Punchlist —</strong> ${esc(r['Punchlist Items Completed']||'None')}</div>
+      <div class="foot">
+        <span style="font-size:11px;color:var(--text-faint);">Responsiveness</span>
+        <div class="dots5">${dots}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   RENDER: 05 EOD Compliance
+   ============================================================ */
+function renderEod(){
+  const rows = STATE.data.eod.filter(matchesFilter);
+  const el = document.getElementById('eodBody');
+  if(!rows.length){ el.innerHTML = emptyState('No EOD compliance records for this selection.'); return; }
+
+  el.innerHTML = rows.map(r=>{
+    const score = Number(r['Daily Compliance Score'])||0;
+    const submitted = yn(r['EOD Report Submitted (Y/N)']);
+    const onTime = yn(r['Submitted Before 5 PM (Y/N)']);
+    return `<div class="card">
+      <div class="card-head">
+        <span class="who">${esc(r.Employee)}</span>
+        <span class="date">${esc(fmtDate(r.Date))}</span>
+      </div>
+      <div class="gauge-wrap">
+        <div class="gauge" style="--score:${score};--score-color:${scoreColor(score)};">
+          <div class="ring-outer"></div>
+          <div class="ring-mid"></div>
+          <div class="ring-score"><span class="num">${score}</span></div>
+        </div>
+        <div>
+          <div class="gauge-label">DAILY COMPLIANCE</div>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+            <span class="badge ${submitted?'ok':'warn'}">${submitted?'EOD SUBMITTED':'NOT SUBMITTED'}</span>
+            <span class="badge ${onTime?'ok':'warn'}">${onTime?'ON TIME':'LATE / MISSING'}</span>
+          </div>
+        </div>
+      </div>
+      <div class="kv"><span class="k">Completed tasks</span><span class="v" style="text-align:right;font-family:var(--font-body);font-weight:400;">${esc(r['Completed Tasks']||'—')}</span></div>
+      <div class="kv"><span class="k">Rolled over</span><span class="v" style="text-align:right;font-family:var(--font-body);font-weight:400;">${esc(r['Rolled-Over Tasks']||'None')}</span></div>
+      <div class="kv"><span class="k">Photos attached</span><span class="v">${esc(r['Photos Attached']||'0')}</span></div>
+      <div class="kv"><span class="k">Mileage logged</span><span class="v">${esc(r['Mileage Logged']||'0')} mi</span></div>
+    </div>`;
+  }).join('');
+}
+
+/* ============================================================
+   RENDER: 06 Weekly Summary
+   ============================================================ */
+function renderWeekly(){
+  const rows = STATE.data.weekly.filter(r => STATE.employee==='ALL' || r.Employee===STATE.employee);
+  const el = document.getElementById('weeklyBody');
+  if(!rows.length){ el.innerHTML = emptyState('No weekly summary rows yet.'); return; }
+
+  el.innerHTML = rows.map(r=>{
+    const score = Number(r['Weekly Compliance Score'])||0;
+    return `<div class="week-card">
+      <div class="card-head">
+        <span class="who">${esc(r.Employee)}</span>
+        <span class="date">Week ending ${esc(fmtDate(r['Week Ending']))}</span>
+      </div>
+      <div class="gauge-wrap">
+        <div class="gauge" style="width:88px;height:88px;--score:${score};--score-color:${scoreColor(score)};">
+          <div class="ring-outer"></div>
+          <div class="ring-mid"></div>
+          <div class="ring-score"><span class="num" style="font-size:19px;">${score}</span></div>
+        </div>
+        <div>
+          <div class="gauge-label">WEEKLY COMPLIANCE</div>
+          <div style="font-size:11px;color:var(--text-faint);margin-top:4px;">out of 100, averaged across logged days</div>
+        </div>
+      </div>
+      <div class="week-stats">
+        <div class="week-stat"><div class="num">${esc(r['Total Site Visits']||'0')}</div><div class="lbl">SITE VISITS</div></div>
+        <div class="week-stat"><div class="num">${esc(r['Total Miles Driven']||'0')}</div><div class="lbl">MILES DRIVEN</div></div>
+        <div class="week-stat"><div class="num">${esc(r['Community Issues (manual)']||'0')}</div><div class="lbl">COMMUNITY ISSUES</div></div>
+        <div class="week-stat"><div class="num">${esc(r['Safety Incidents (manual)']||'0')}</div><div class="lbl">SAFETY INCIDENTS</div></div>
+      </div>
+      <div class="manual-note">Community issues and safety incidents are manual entries pulled from the SOP-FAC-002 log and community-inquiry tracker.</div>
+    </div>`;
+  }).join('');
+}
+
+function emptyState(msg){ return `<div class="empty">${esc(msg)}</div>`; }
+
+function renderAll(){
+  renderTimeline();
+  renderLocation();
+  renderVehicle();
+  renderContractor();
+  renderEod();
+  renderWeekly();
+}
+
+/* ============================================================
+   NAV
+   ============================================================ */
+const titles = {
+  timeline:'Daily Timeline', location:'Location Verification', vehicle:'Vehicle Tracking',
+  contractor:'Contractor Interactions', eod:'EOD Compliance', weekly:'Weekly Summary'
+};
+document.getElementById('navlist').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const target = btn.dataset.section;
+  document.querySelectorAll('.navlist button').forEach(b=>b.classList.toggle('active', b===btn));
+  document.querySelectorAll('.section').forEach(s=>s.classList.toggle('active', s.id === 'sec-'+target));
+  document.getElementById('pageTitle').textContent = titles[target];
+});
+
+loadAll();
+</script>
+</body>
+</html>
