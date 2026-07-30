@@ -537,19 +537,9 @@ const DEMO = {
    ============================================================ */
 const STATE = { data: {timeline:[],location:[],vehicle:[],contractor:[],eod:[],weekly:[]}, source:'demo', employee:'ALL', date:'ALL' };
 
-function fetchCsv(url){
-  return new Promise((resolve)=>{
-    Papa.parse(url, {
-      download:true, header:true, skipEmptyLines:true,
-      complete: r => resolve(r.data || []),
-      error: () => resolve(null)
-    });
-  });
-}
-
-// Dashboard Settings isn't a flat table — it's three stacked sections
-// (SITES & GEOFENCES / EMPLOYEES / COMPLIANCE THRESHOLDS) in one tab.
-// Fetch it as raw rows and walk it section by section.
+// Published tabs have a title row and a description row above the real
+// header row, so we fetch raw and locate the header ourselves rather than
+// assuming row 1 is it.
 function fetchCsvRaw(url){
   return new Promise((resolve)=>{
     Papa.parse(url, {
@@ -558,6 +548,23 @@ function fetchCsvRaw(url){
       error: () => resolve(null)
     });
   });
+}
+
+function extractTable(rawRows){
+  if(!rawRows || !rawRows.length) return [];
+  const headerIdx = rawRows.findIndex(r => r[0] === 'Date' || r[0] === 'Week Ending');
+  if(headerIdx === -1) return [];
+  const headers = rawRows[headerIdx].map(h => String(h||'').trim());
+  const out = [];
+  for(let i = headerIdx+1; i < rawRows.length; i++){
+    const row = rawRows[i];
+    // stop at the trailing note row (only column A populated) or a blank row
+    if(!row || row[1] === undefined || String(row[1]).trim() === '') break;
+    const obj = {};
+    headers.forEach((h, idx) => { if(h) obj[h] = row[idx] !== undefined ? row[idx] : ''; });
+    out.push(obj);
+  }
+  return out;
 }
 
 function parseSettings(rows){
@@ -596,7 +603,8 @@ async function loadAll(){
   for(const k of keys){
     const url = CONFIG.CSV[k];
     if(url && url.trim()){
-      const rows = await fetchCsv(url.trim());
+      const rawRows = await fetchCsvRaw(url.trim());
+      const rows = extractTable(rawRows);
       if(rows && rows.length){ STATE.data[k] = rows; anyLive = true; continue; }
     }
     STATE.data[k] = DEMO[k];
@@ -641,7 +649,7 @@ function populateFilters(){
 
   const dates = new Set();
   STATE.data.timeline.forEach(r=>{ if(r.Date) dates.add(r.Date); });
-  const sorted = [...dates].sort();
+  const sorted = [...dates].sort((a,b)=>toSortableDate(a)-toSortableDate(b));
   dateSel.innerHTML = '<option value="ALL">All dates</option>' +
     sorted.map(d=>`<option value="${esc(d)}">${fmtDate(d)}</option>`).join('');
   if(sorted.length) dateSel.value = sorted[sorted.length-1];
@@ -663,9 +671,15 @@ function matchesFilter(row){
 function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function initials(name){ return String(name||'?').split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase(); }
 function fmtDate(d){
-  const dt = new Date(d + 'T00:00:00');
+  let dt = new Date(d + 'T00:00:00');
+  if(isNaN(dt)) dt = new Date(d);
   if(isNaN(dt)) return d;
   return dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+}
+function toSortableDate(d){
+  let dt = new Date(d + 'T00:00:00');
+  if(isNaN(dt)) dt = new Date(d);
+  return isNaN(dt) ? 0 : dt.getTime();
 }
 function yn(v){ return String(v).trim().toUpperCase() === 'Y'; }
 function scoreColor(n){
