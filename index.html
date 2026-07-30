@@ -454,12 +454,14 @@ const CONFIG = {
 
   // Paste published-CSV URLs here to go live. Leave '' to use demo data.
   CSV: {
-    timeline:   '',
-    location:   '',
-    vehicle:    '',
-    contractor: '',
-    eod:        '',
-    weekly:     ''
+    timeline:   'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=1923969477&single=true&output=csv',
+    location:   'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=1655956049&single=true&output=csv',
+    vehicle:    'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=1550576265&single=true&output=csv',
+    contractor: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=1710877440&single=true&output=csv',
+    eod:        'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=1228899513&single=true&output=csv',
+    weekly:     'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=1670595616&single=true&output=csv',
+    // Multi-section layout tab — parsed separately in loadAll(), not through the generic header:true path.
+    settings:   'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=579744988&single=true&output=csv'
   },
 
   // Mirrors the Dashboard Settings tab. Edit to match your roster/sites.
@@ -545,9 +547,52 @@ function fetchCsv(url){
   });
 }
 
+// Dashboard Settings isn't a flat table — it's three stacked sections
+// (SITES & GEOFENCES / EMPLOYEES / COMPLIANCE THRESHOLDS) in one tab.
+// Fetch it as raw rows and walk it section by section.
+function fetchCsvRaw(url){
+  return new Promise((resolve)=>{
+    Papa.parse(url, {
+      download:true, header:false, skipEmptyLines:true,
+      complete: r => resolve(r.data || []),
+      error: () => resolve(null)
+    });
+  });
+}
+
+function parseSettings(rows){
+  let section = null;
+  const sites = [], employees = [], thresholds = {};
+  const thresholdKeyMap = {
+    'minimum site visits / day': 'minSiteVisitsPerDay',
+    'max off-site clock-in attempts allowed': 'maxOffSiteClockIns',
+    'daily mileage review threshold (miles)': 'dailyMileageReview'
+  };
+  rows.forEach(row=>{
+    const c0 = String(row[0]||'').trim();
+    if(!c0) return;
+    if(/^SITES & GEOFENCES/i.test(c0)){ section='sites'; return; }
+    if(/^EMPLOYEES/i.test(c0)){ section='employees'; return; }
+    if(/^COMPLIANCE THRESHOLDS/i.test(c0)){ section='thresholds'; return; }
+    if(/^Site Code$/i.test(c0) || /^Employee ID$/i.test(c0)) return; // sub-header rows
+    if(/^Legend/i.test(c0)) return; // trailing note row
+
+    if(section === 'sites' && c0 !== 'Site Code'){
+      sites.push({ code:c0, name:String(row[1]||'').trim() });
+    } else if(section === 'employees' && c0 !== 'Employee ID'){
+      employees.push({ id:c0, name:String(row[1]||'').trim(), role:String(row[2]||'').trim(), vehicle:String(row[3]||'').trim() });
+    } else if(section === 'thresholds'){
+      const key = thresholdKeyMap[c0.toLowerCase()];
+      if(key){ thresholds[key] = Number(row[1]) || 0; }
+    }
+  });
+  return { sites, employees, thresholds };
+}
+
 async function loadAll(){
-  const keys = Object.keys(CONFIG.CSV);
+  const keys = Object.keys(CONFIG.CSV).filter(k => k !== 'settings');
   let anyLive = false;
+
   for(const k of keys){
     const url = CONFIG.CSV[k];
     if(url && url.trim()){
@@ -556,6 +601,18 @@ async function loadAll(){
     }
     STATE.data[k] = DEMO[k];
   }
+
+  const settingsUrl = CONFIG.CSV.settings;
+  if(settingsUrl && settingsUrl.trim()){
+    const rawRows = await fetchCsvRaw(settingsUrl.trim());
+    if(rawRows && rawRows.length){
+      const parsed = parseSettings(rawRows);
+      if(parsed.sites.length) CONFIG.SITES = parsed.sites;
+      if(parsed.employees.length) CONFIG.EMPLOYEES = parsed.employees;
+      if(Object.keys(parsed.thresholds).length) CONFIG.THRESHOLDS = { ...CONFIG.THRESHOLDS, ...parsed.thresholds };
+    }
+  }
+
   STATE.source = anyLive ? 'live' : 'demo';
   updateSourcePill();
   populateFilters();
