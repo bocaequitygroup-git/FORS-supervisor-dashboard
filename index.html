@@ -336,6 +336,7 @@ select:focus{outline:2px solid var(--accent);outline-offset:1px;}
       <button data-section="contractor"><span class="n">04</span>Contractor Interactions</button>
       <button data-section="eod"><span class="n">05</span>EOD Compliance</button>
       <button data-section="weekly"><span class="n">06</span>Weekly Summary</button>
+      <button data-section="dailysummary"><span class="n">07</span>Daily Summary</button>
     </div>
 
     <div class="rail-foot">
@@ -436,6 +437,17 @@ select:focus{outline:2px solid var(--accent);outline-offset:1px;}
       <div class="grid" id="weeklyBody"></div>
     </section>
 
+    <!-- 07 Daily Summary -->
+    <section class="section" id="sec-dailysummary">
+      <div class="section-head">
+        <div>
+          <h2>Daily Summary</h2>
+          <p>Auto-detected from the live tab's own columns — tell me the intended layout and I'll give this a purpose-built view.</p>
+        </div>
+      </div>
+      <div class="grid" id="dailySummaryBody"></div>
+    </section>
+
     <div class="footnote">
       Data sources: Daily Timeline, Location Verification, Vehicle Tracking, Contractor Interactions, EOD Compliance and Weekly Summary tabs.
       To go live, publish each tab in Google Sheets (<code>File → Share → Publish to web → CSV</code>) and paste the URLs into the
@@ -460,6 +472,7 @@ const CONFIG = {
     contractor: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=1710877440&single=true&output=csv',
     eod:        'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=1228899513&single=true&output=csv',
     weekly:     'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=1670595616&single=true&output=csv',
+    dailySummary: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=1831405576&single=true&output=csv',
     // Multi-section layout tab — parsed separately in loadAll(), not through the generic header:true path.
     settings:   'https://docs.google.com/spreadsheets/d/e/2PACX-1vRqyTBA53btGKfBOZv4ZcDjZhmcLgNdpDJx_hNzre0YP7dBEsDO4tnNmXCELGOHzqfbDJtn0CYZUflv/pub?gid=579744988&single=true&output=csv'
   },
@@ -529,13 +542,14 @@ const DEMO = {
   weekly: [
     {['Week Ending']:'2026-08-02',Employee:'J. Martinez','Total Site Visits':'4','Total Miles Driven':'106','Community Issues (manual)':'0','Safety Incidents (manual)':'0','Weekly Compliance Score':'100'},
     {['Week Ending']:'2026-08-02',Employee:'T. Reyes','Total Site Visits':'0','Total Miles Driven':'0','Community Issues (manual)':'0','Safety Incidents (manual)':'0','Weekly Compliance Score':'25'}
-  ]
+  ],
+  dailySummary: [] // schema unknown — auto-rendered generically from whatever the live tab returns
 };
 
 /* ============================================================
    STATE + LOAD
    ============================================================ */
-const STATE = { data: {timeline:[],location:[],vehicle:[],contractor:[],eod:[],weekly:[]}, source:'demo', employee:'ALL', date:'ALL' };
+const STATE = { data: {timeline:[],location:[],vehicle:[],contractor:[],eod:[],weekly:[],dailySummary:[]}, source:'demo', employee:'ALL', date:'ALL' };
 
 // Published tabs have a title row and a description row above the real
 // header row, so we fetch raw and locate the header ourselves rather than
@@ -947,6 +961,31 @@ function renderWeekly(){
 
 function emptyState(msg){ return `<div class="empty">${esc(msg)}</div>`; }
 
+/* ============================================================
+   RENDER: 07 Daily Summary (schema auto-detected)
+   ============================================================ */
+function renderDailySummary(){
+  const rows = STATE.data.dailySummary.filter(matchesFilter);
+  const el = document.getElementById('dailySummaryBody');
+  if(!rows.length){
+    el.innerHTML = emptyState('No Daily Summary data loaded yet. Once the tab is live, its columns will render automatically here.');
+    return;
+  }
+  const skipKeys = new Set(['Date','Employee','Key (helper)']);
+  el.innerHTML = rows.map(r=>{
+    const kvs = Object.keys(r).filter(k=>!skipKeys.has(k)).map(k=>
+      `<div class="kv"><span class="k">${esc(k)}</span><span class="v" style="text-align:right;font-weight:400;font-family:var(--font-body);">${esc(r[k]||'—')}</span></div>`
+    ).join('');
+    return `<div class="card">
+      <div class="card-head">
+        <span class="who">${esc(r.Employee||'—')}</span>
+        <span class="date">${esc(fmtDate(r.Date||''))}</span>
+      </div>
+      ${kvs}
+    </div>`;
+  }).join('');
+}
+
 function renderAll(){
   renderTimeline();
   renderLocation();
@@ -954,6 +993,7 @@ function renderAll(){
   renderContractor();
   renderEod();
   renderWeekly();
+  renderDailySummary();
 }
 
 /* ============================================================
@@ -961,7 +1001,8 @@ function renderAll(){
    ============================================================ */
 const titles = {
   timeline:'Daily Timeline', location:'Location Verification', vehicle:'Vehicle Tracking',
-  contractor:'Contractor Interactions', eod:'EOD Compliance', weekly:'Weekly Summary'
+  contractor:'Contractor Interactions', eod:'EOD Compliance', weekly:'Weekly Summary',
+  dailysummary:'Daily Summary'
 };
 document.getElementById('navlist').addEventListener('click', (e)=>{
   const btn = e.target.closest('button');
